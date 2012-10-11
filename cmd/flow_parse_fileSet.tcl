@@ -19,9 +19,9 @@ namespace import ::octopusNC::*
 # BEGIN Generating ${cds-lib} if necessary
 proc generate_cds_lib args {
 
-	set var_array(10,file)    	[list "--file" "<none>" "string" "1" "1" "" "Input file from which cds.lib is generated"]
-	set var_array(20,cds-file)  	[list "--cds-file" "cds.lib" "string" "1" "1" "" "Name of the output \"cds.lib\" file."]
-	set var_array(30,amend-cds-lib)	[list "--amend-cds-lib" "" "string" "1" "1" "" "File containing UNSET statements to speed-up elaboration. This file is just concatenated with whatever specified in cds.lib"]
+	set var_array(10,file)    		[list "--file" "<none>" "string" "1" "1" "" "Input file from which cds.lib is generated"]
+	set var_array(20,generate-cds-file)  	[list "--generate-cds-file" "" "string" "1" "1" "" "Name of the output \"cds.lib\" file."]
+
 	::octopus::extract_check_options_data
 
 	::octopus::abort_on error --return
@@ -29,13 +29,10 @@ proc generate_cds_lib args {
 	# This variables contains all lists with RTL/type/library/other options
 	set file_set_total [::octopus::parse_file_set --type utel --file $file]
 
-	display_message info "Generating ${cds-file}"
-	exec rm -rf ${cds-file}
-	if { "${amend-cds-lib}" != "" } {
-		exec cp ${amend-cds-lib} ${cds-file}
-		exec chmod u+w ${cds-file}
-	}
-	set fileId_cdslib [open ${cds-file} {WRONLY APPEND CREAT} 0740]
+	display_message info "Generating ${generate-cds-file}"
+	exec rm -rf ${generate-cds-file}
+
+	set fileId_cdslib [open ${generate-cds-file} {WRONLY CREAT} 0740]
 	set libraries ""
 	foreach x $file_set_total {
 		foreach { f t l o } $x {
@@ -43,9 +40,8 @@ proc generate_cds_lib args {
 			# BEGIN detection of a duplicated library in the file_set_total
 			if { [lsearch $libraries $l ] == -1 } {
 				# Create the directory for the library
-				exec rm -rf $l
-				exec mkdir -p $l
-				# Add the library in the list so we do not have double entries in the ${cds-file}
+				exec mkdir -p [file dirname ${generate-cds-file}]/$l
+				# Add the library in the list so we do not have double entries in the ${generate-cds-file}
 				lappend libraries $l
 				# Add the library in the $cdslib
 				puts $fileId_cdslib "DEFINE $l $l"
@@ -56,7 +52,7 @@ proc generate_cds_lib args {
 	}
 	close $fileId_cdslib
 	puts ""
-	display_message info "DONE: Generating ${cds-file}"
+	display_message info "DONE: Generating ${generate-cds-file}"
 }
 # END
 ################################################################################
@@ -117,101 +113,72 @@ proc generate_fileset args {
 
 ################################################################################
 # BEGIN procedure for parsing the fileset file(s)
-proc compile_fileset args {
+proc irun_fileset args {
 
 	upvar #0 env env
 
-	set var_array(10,file)    	[list "--file" "<none>" "string" "1" "1" "" "Input file contains all files to be compiled"]
-	set var_array(20,cds-lib)	[list "--cds-lib" "<none>" "string" "1" "1" "" "The \"cds.lib\" file required for library and directory association"]
-	set var_array(30,template)	[list "--template" "" "string" "1" "1" "" "Specify the name of the template script to write out"]
-	set var_array(40,ncvhdl-option)	[list "--ncvhdl-option" "" "string" "1" "1" "" "If user wants to pass additional command line options to ncvhdl commad"]
-	set var_array(50,ncvlog-option)	[list "--ncvlog-option" "" "string" "1" "1" "" "If user wants to pass additional command line options to ncvlog commad"]
+	set var_array(10,file)    	[list "--file" "<none>" "string" "1" "infinity" "" "Input file contains all files to be compiled"]
+	set var_array(20,template)	[list "--template" "" "string" "1" "1" "" "Specify the name of the template script to write out"]
+	set var_array(30,irun-option)	[list "--irun-option" "" "string" "1" "1" "" "If user wants to pass additional command line options to irun command"]
 
 	::octopus::extract_check_options_data
 
 	::octopus::abort_on error --return
 
-	display_message info "Starting compilation"
-	exec mkdir -p log
-	catch {eval exec rm -rf [glob log/ncv*log]}
+
+	exec mkdir -p log; catch {eval exec rm -rf [glob log/*log]}
 
 	set file_set_total [::octopus::parse_file_set --type utel --file $file]
 
-	set ncvlog "$env(CADENV_HOME)/cadbin/ncvlog -64 -UPDATE -messages -CDSLIB ${cds-lib} ${ncvhdl-option}"
-	set ncvhdl "$env(CADENV_HOME)/cadbin/ncvhdl -64 -UPDATE -messages -v93 -CDSLIB ${cds-lib} ${ncvlog-option}"
+	set irun "$env(CADENV_HOME)/cadbin/irun -64 ${irun-option}"
 
 	# Do the executables exist?
-	::octopus::check_file --type exe --file $env(CADENV_HOME)/cadbin/ncvlog $env(CADENV_HOME)/cadbin/ncvhdl
+	::octopus::check_file --type exe --file $env(CADENV_HOME)/cadbin/irun
 
 	::octopus::abort_on error
 
 	if { "$template" != "" } {
 		set fileId_template [open $template {WRONLY APPEND CREAT} 0740 ]
 	}
-	################################################################################
-	# BEGIN parsing the fileset file
-	set index 0
-	set equivalent_files "" ; # equivalent files are those that can be compiled together
-	set nr_files [llength $file_set_total]
-	puts -nonewline "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\bEvaluating 0/$nr_files     "
+
+	set opt ""
+	set irun_files ""
+	set previous_lib ""
 	foreach x $file_set_total {
-		incr index
 		foreach { f t l o } $x {
-			puts -nonewline "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\bEvaluating ${index}/$nr_files     "
-			display_message debug "<2> ${f}"
-			flush stdout
-
-			if { 	[lindex [lindex $file_set_total $index] 1] == $t && \
-				[lindex [lindex $file_set_total $index] 2] == $l && \
-				[lindex [lindex $file_set_total $index] 3] == $o } {
-				# Current file type/library other options are the same for the next field. Thus keep the files and process further
-				set equivalent_files "$equivalent_files $f"
-				continue
+			display_message debug "<2> $f"
+			if { [string trim $o] != "" } {
+				set opt [concat $opt " \\\n" $o]
 			}
-
-			# If we reach this place it means that we reached the end of equivalent files, thus save the value and reset it
-			if { $equivalent_files != "" } {
-				set f "$equivalent_files $f"
-				set equivalent_files ""
-			}
-
-			################################################################################
-			# BEGIN start compilation
-			set opt ""
-			set k ""
-			set v ""
-			foreach { k v } $o {
-			set opt [concat $opt $k $v]
-			}
-
-			case $t in {
-			"verilog" {
-					set cmd [concat $ncvlog $opt -work $l -logfile "log/ncvlog${index}.log" [subst $f]]
-					if { "$template" != "" } {
-						puts $fileId_template "$cmd"
-					}
-					if { [catch {eval exec $cmd}] } {
-						display_message error "compiling. Continuing to find other errors"
-					}
+			if { "$previous_lib" != "$l" } {
+				if { "$irun_files" == "" } {
+					set irun_files "$irun_files \\\n-makelib $l -view module \\\n  $f"
+				} else {
+					set irun_files "$irun_files \\\n-endlib \\\n-makelib $l -view module \\\n  $f"
 				}
-			"vhdl" {
-					set cmd [concat $ncvhdl $opt -work $l -logfile "log/ncvhdl${index}.log" [subst $f]]
-					if { "$template" != "" } {
-						puts $fileId_template "$cmd"
-					}
-					if { [catch {eval exec $cmd}] } {
-						display_message error "compiling. Continuing to find other errors"
-					}
-				}
+				set previous_lib $l
+			} else {
+				set irun_files "$irun_files \\\n  $f"
 			}
-			# END start compilation
-			################################################################################
 		}
+	}
+	set irun_files "$irun_files \\\n-endlib"
+
+	# END
+	set cmd [concat $irun $opt  $irun_files \\\n-l "log/irun.log"]
+	if { "$template" != "" } {
+		# Replace $env(VARIABLE) with $VARIABLE
+		regsub -all {env\(([^\s]+)\)} $cmd {\1} cmd_template
+		puts $fileId_template "$cmd_template"
+	}
+	display_message info "Invoking irun... Be patient."
+	if { [catch {eval exec $cmd >&@stdout}] } {
+		display_message error "Running irun. Check log/irun.log for additional information."
 	}
 
 	::octopus::append_cascading_variables
 	puts ""
-	display_message info "DONE: Starting compilation"
+	display_message info "DONE: Running irun"
 }
 # END procedure for parsing the fileset file(s)
 ################################################################################
@@ -222,39 +189,24 @@ proc compile_fileset args {
 regexp {(.*/data/)([^/]+_lib)/([^/]+)/.*} [exec pwd] EXEC_PATH DATA_PATH CRT_LIB CRT_CELL
 
 set var_array(10,file)			[list "--file" "<none>" "string" "1" "infinity" "" "TCL source fileset(s) list. More than one can be specified. a RTL Compiler script using read_hdl procedure can also be loaded."]
-set var_array(20,fileset-out)		[list "--fileset-out" "/tmp/fileset-out.tcl" "string" "1" "1" "" "Writes out a new fileset removing duplicate entries"]
-set var_array(30,generate-cds-lib)	[list "--generate-cds-lib" "false" "boolean" "" "" "" "Generates a cds.lib file automatically"]
-set var_array(40,cds-lib)		[list "--cds-lib" "cds.lib" "string" "1" "1" "" "Compiles all files in the source fileset list(s)"]
-set var_array(45,amend-cds-lib)		[list "--amend-cds-lib" "" "string" "1" "1" "" "File containing UNSET statements to speed-up elaboration. This file concatedanet with whatever specified in cds.lib"]
-set var_array(50,nccompile)		[list "--nccompile" "false" "boolean" "" "" "" "Compiles all files in the source fileset list(s)"]
-set var_array(53,ncvhdl-option)		[list "--ncvhdl-option" "" "string" "1" "1" "" "If user wants to pass additional command line options to ncvhdl commad"]
-set var_array(56,ncvlog-option)		[list "--ncvlog-option" "" "string" "1" "1" "" "If user wants to pass additional command line options to ncvlog commad"]
-set var_array(60,ncelaborate)		[list "--ncelaborate" "false" "boolean" "" "" "" "Elaborates the previously compiled file."]
-set var_array(65,ncelab-option)		[list "--ncelab-option" "" "string" "1" "1" "" "If user wants to pass additional command line options to ncelab commad"]
-set var_array(70,ncsimulate)		[list "--ncsimulate" "false" "boolean" "1" "1" "" "Runs ncsim on the previously elaborated files"]
-set var_array(75,ncsim-option)		[list "--ncsim-option" "" "string" "1" "1" "" "If user wants to pass additional command line options to ncsim commad"]
-set var_array(80,template)		[list "--template" "" "string" "1" "1" "" "Specify the name of the template script for the compilation/elaboration/simulation (depending on the options specified)"]
-set var_array(90,libcellarch)		[list "<orphaned>" "$CRT_CELL" "string" "1" "1" "" "If string is specified, it should be in the form \[l.e:a] being library.entity:architecture, or just entity"]
+set var_array(20,fileset-out)		[list "--fileset-out" "" "string" "1" "1" "" "Writes out a new fileset removing duplicate entries"]
+set var_array(30,generate-cds-lib)	[list "--generate-cds-lib" "" "string" "1" "1" "" "Generates a cds.lib file automatically. For irun this is not recommended."]
+set var_array(60,no-irun)		[list "--no-irun" "false" "boolean" "1" "1" "" "Prevents running irun."]
+set var_array(70,irun-option)		[list "--irun-option" "-v93 -top $CRT_CELL" "string" "1" "1" "" "If user wants to pass additional command line options to irun command"]
+set var_array(80,template)		[list "--template" "" "string" "1" "1" "" "Specify the name of the standalone template script."]
 
 set help_head {
 	puts "[uplevel {file tail $argv0} ]"
 	puts ""
 	puts "Description:"
-	puts " Generates cadence cds.lib, single file list, "
-	puts "   templates for compilation, elaboration and simulation. "
-	puts "   Furthermore it can run compilation, elaboration, simulation directly"
+	puts "  Starts irun on the file sets."
+	puts "  This utility can also:"
+	puts "    - generate cds.lib file"
+	puts "    - bash shell script for standalone run"
 	puts ""
 }
 
-set help_tail {
-	puts "More information:"
-	puts "  If you provide your own cds.lib file you would also need to create the compilation directories"
-	puts "    Not creating the directories will result in compilation failures"
-}
 ::octopus::extract_check_options_data
-
-display_message debug "<2> Cell name detection: $CRT_CELL"
-display_message debug "<2> Cell name: $libcellarch"
 
 ::octopus::abort_on error --display-help
 
@@ -262,19 +214,11 @@ display_message debug "<2> Cell name: $libcellarch"
 
 ################################################################################
 # BEGIN Verify that the $fileset-out/$cds-lib files are not existent in case they are specified
-set arguments "fileset-out cds-lib"
+set arguments "fileset-out generate-cds-lib"
 foreach crt_arg $arguments {
 	if {   "[set $crt_arg ]" != "" && [ file exists [set $crt_arg] ] && ! [file writable [set $crt_arg]] } {
 		display_message error "File [set $crt_arg] is not writable."
 	}
-}
-
-if { "${generate-cds-lib}" == "false" && ! [file exists ${cds-lib}] } {
-	display_message error "File ${cds-lib} does not exist. Forgot to specify --generate-cds-lib option?"
-}
-
-if { "${amend-cds-lib}" != "" && ! [file exists ${amend-cds-lib}]  } {
-	display_message error "File ${amend-cds-lib} does not exist."
 }
 
 ::octopus::abort_on error --display-help
@@ -283,10 +227,11 @@ if { "${amend-cds-lib}" != "" && ! [file exists ${amend-cds-lib}]  } {
 ################################################################################
 
 if { "$template" != "" } {
+	exec rm -rf $template
 	set fileId_template [open $template {WRONLY CREAT} 0740]
 	puts $fileId_template "#!/bin/bash"
-	puts $fileId_template "#generated by $argv0"
-	puts $fileId_template "#TODO: write the date and the command line it was run with"
+	puts $fileId_template "#Generated by: $argv0 $argv"
+	puts $fileId_template "#Generation date: [exec date]"
 	puts $fileId_template ""
 	puts $fileId_template "# exit at any error"
 	puts $fileId_template "set -e"
@@ -300,86 +245,18 @@ if { "$template" != "" } {
 ::octopus::check_file --type tcl --file ${file}
 ::octopus::abort_on error
 
-if { "${generate-cds-lib}" == "true" } {
-	generate_cds_lib --file ${file} --cds-file ${cds-lib} --amend-cds-lib ${amend-cds-lib}
+if { "${generate-cds-lib}" != "" } {
+	generate_cds_lib --file ${file} --generate-cds-file ${generate-cds-lib}
 }
 
-if { "$nccompile" == "true" || "${fileset-out}" != "/tmp/fileset-out.tcl" } {
+if { "${fileset-out}" != "" } {
 	generate_fileset --file ${file} --output-file ${fileset-out}
 }
 
-if { "$nccompile" == "true" } {
-	compile_fileset --file ${fileset-out} --cds-lib ${cds-lib} --template $template --ncvhdl-option ${ncvhdl-option} --ncvlog-option ${ncvlog-option}
-	display_strange_warnings_fatals --file "log/ncv*.log"
+if { "${no-irun}" == "false" } {
+	irun_fileset --file ${file} --template $template --irun-option ${irun-option}
+	display_strange_warnings_fatals --file "log/irun.log"
 }
-::octopus::abort_on error
+::octopus::abort_on error --messages
 # END
-################################################################################
-
-
-################################################################################
-# BEGIN elaborate
-if { "$ncelaborate" == "true" } {
-    display_message info "Start elaborate step"
-    exec rm -rf log/ncelab.log
-
-    set NCELAB "$env(CADENV_HOME)/cadbin/ncelab"
-    set cmd "$NCELAB -cdslib ${cds-lib} \
-           -64 \
-           -access +rwc \
-           -update \
-           -relax \
-           -timescale 1ns/1ps \
-           -messages \
-           -logfile log/ncelab.log \
-           ${ncelab-option} \
-           $libcellarch"
-    if { "$template" != "" } {
-		set fileId_template [open $template {WRONLY APPEND CREAT} 0740 ]
-                puts $fileId_template ""
-                puts $fileId_template "# Elaborate"
-                puts $fileId_template "$cmd"
-                close $fileId_template
-    }
-    if { [::octopus::check_file --type exe --file  $NCELAB] ||  [catch {eval exec $cmd >&@stdout} ] } {
-        display_message error "Elaboration stopped with errors"
-    }
-
-    display_strange_warnings_fatals --file "log/ncelab.log"
-    ::octopus::abort_on error
-    display_message info "End ncelaborate step"
-}
-
-
-# END elaborate
-################################################################################
-
-################################################################################
-# BEGIN simulate
-if { "$ncsimulate" == "true" } {
-	display_message info "Start ncsimulate step"
-	exec rm -rf log/ncsim.log
-
-	set NCSIM "$env(CADENV_HOME)/cadbin/ncsim"
-	set cmd "$NCSIM -cdslib ${cds-lib} \
-	       -64 \
-	       -gui \
-	       -logfile log/ncsim.log \
-	       ${ncsim-option} \
-	       $libcellarch"
-	if { "$template" != "" } {
-		set fileId_template [open $template {WRONLY APPEND CREAT} 0740 ]
-		puts $fileId_template ""
-		puts $fileId_template "# Simulate"
-		puts $fileId_template "$cmd"
-		close $fileId_template
-	}
-	if { [::octopus::check_file --type exe --file  $NCSIM] || [catch {eval exec $cmd >&@stdout} ] } {
-	    display_message error "Simulation stopped with errors"
-	}
-	display_strange_warnings_fatals --file "log/ncsim.log"
-	::octopus::abort_on error
-	display_message info "End ncsimulate step"
-}
-# END simulate
 ################################################################################
