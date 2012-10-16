@@ -88,9 +88,9 @@ proc generate_fileset args {
 	set equivalent_files "" ; # equivalent files are those that can be compiled together
 	foreach x $file_set_total {
 		foreach { f t l o } $x {
-			if { "$t" != "vhdl" && "$t" != "verilog"} {
+			if { ! [string match "* $t *" " vhdl verilog vlog verilogams vams " ] } {
 				display_message error "unrecognised type $t for file $f"
-				display_message error "Type can be either vhdl or verilog"
+				display_message error "Type can be either vhdl/verilog/vlog/verilogams/vams"
 			}
 			if { [lsearch $files [subst $f] ] == -1 } {
 				# Add the file in the list so we do not have double entries
@@ -141,31 +141,32 @@ proc irun_fileset args {
 		set fileId_template [open $template {WRONLY APPEND CREAT} 0740 ]
 	}
 
-	set opt ""
 	set irun_files ""
 	set previous_lib ""
 	foreach x $file_set_total {
 		foreach { f t l o } $x {
 			display_message debug "<2> $f"
-			if { [string trim $o] != "" } {
-				set opt [concat $opt " \\\n" $o]
-			}
 			if { "$previous_lib" != "$l" } {
 				if { "$irun_files" == "" } {
-					set irun_files "$irun_files \\\n-makelib $l -view module \\\n  $f"
+					set irun_files "$irun_files \\\n-makelib $l"
 				} else {
-					set irun_files "$irun_files \\\n-endlib \\\n-makelib $l -view module \\\n  $f"
+					set irun_files "$irun_files \\\n${opt}\\\n${accumulate_file}\\\n-endlib \\\n-makelib $l"
 				}
 				set previous_lib $l
+				set accumulate_file "  $f"
+				set opt "  [string trim $o]"
 			} else {
-				set irun_files "$irun_files \\\n  $f"
+				set accumulate_file "$accumulate_file\\\n  $f"
+				if { [string trim $o] != "" } {
+					set opt [concat $opt "\\\n" "  " $o]
+				}
 			}
 		}
 	}
-	set irun_files "$irun_files \\\n-endlib"
+	set irun_files "$irun_files \\\n${opt}\\\n${accumulate_file}\\\n-endlib"
 
 	# END
-	set cmd [concat $irun $opt  $irun_files \\\n-l "log/irun.log"]
+	set cmd [concat $irun $irun_files \\\n-l "log/irun.log"]
 	if { "$template" != "" } {
 		# Replace $env(VARIABLE) with $VARIABLE
 		regsub -all {env\(([^\s]+)\)} $cmd {\1} cmd_template
