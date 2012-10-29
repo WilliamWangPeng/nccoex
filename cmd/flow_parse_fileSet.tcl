@@ -150,20 +150,20 @@ proc irun_fileset args {
 				if { "$irun_files" == "" } {
 					set irun_files "$irun_files \\\n-makelib $l"
 				} else {
-					set irun_files "$irun_files \\\n${opt}\\\n${accumulate_file}\\\n-endlib \\\n-makelib $l"
+					set irun_files "$irun_files \\\n${opt} \\\n${accumulate_file} \\\n-endlib \\\n-makelib $l"
 				}
 				set previous_lib $l
 				set accumulate_file "  $f"
 				set opt "  [string trim $o]"
 			} else {
-				set accumulate_file "$accumulate_file\\\n  $f"
+				set accumulate_file "$accumulate_file \\\n  $f"
 				if { [string trim $o] != "" } {
 					set opt [concat $opt "\\\n" "  " $o]
 				}
 			}
 		}
 	}
-	set irun_files "$irun_files \\\n${opt}\\\n${accumulate_file}\\\n-endlib"
+	set irun_files "$irun_files \\\n${opt} \\\n${accumulate_file} \\\n-endlib"
 
 	# END
 	set cmd [concat $irun $irun_files \\\n-l "log/irun.log"]
