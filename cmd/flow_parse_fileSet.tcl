@@ -9,11 +9,46 @@ if { [info exists env(OCTOPUS_INSTALL_PATH) ] } {
         exit 1
 }
 
-lappend auto_path $env(OCTOPUS_INSTALL_PATH)
 package require octopus 0.1
 package require octopusNC 0.1
 namespace import ::octopus::*
 namespace import ::octopusNC::*
+
+################################################################################
+# BEGIN check_set_flo
+
+proc check_set_flo {x} {
+	upvar f f
+	upvar l l 
+	upvar o o 
+	upvar warning_given warning_given
+	if { [ llength $x ] == 4 && ! [info exists warning_given]} {
+		display_message info "List item detected for $x."
+		display_message none    " <Type> might disappear in the future since irun/octopus/etc. should be able to detect it automatically"
+		set warning_given "true"
+		set f [lindex $x 0]
+		set t [lindex $x 1]
+		set l [lindex $x 2]
+		set o [lindex $x 3]
+		if { ! [string match "* $t *" " vhdl verilog vlog verilogams vams " ] } {
+			display_message error "unrecognised type $t for file $f"
+			display_message error "Type can be either vhdl/verilog/vlog/verilogams/vams"
+		}
+	} elseif { [ llength $x ] == 3 } {
+		set f [lindex $x 0]
+		set l [lindex $x 1]
+		set o [lindex $x 2]
+	} else {
+		display_message error "Wrong format detected. List content is: $x while it should be <file> [<type>] <library> <options>"
+		set f "<ERROR in source file>"
+		set l "<ERROR in source file>"
+		set o "<ERROR in source file>"
+	}
+	::octopus::append_cascading_variables
+}
+
+# END check_set_flo
+################################################################################
 
 ################################################################################
 # BEGIN Generating ${cds-lib} if necessary
@@ -35,20 +70,19 @@ proc generate_cds_lib args {
 	set fileId_cdslib [open ${generate-cds-file} {WRONLY CREAT} 0740]
 	set libraries ""
 	foreach x $file_set_total {
-		foreach { f t l o } $x {
-			################################################################################
-			# BEGIN detection of a duplicated library in the file_set_total
-			if { [lsearch $libraries $l ] == -1 } {
-				# Create the directory for the library
-				exec mkdir -p [file dirname ${generate-cds-file}]/$l
-				# Add the library in the list so we do not have double entries in the ${generate-cds-file}
-				lappend libraries $l
-				# Add the library in the $cdslib
-				puts $fileId_cdslib "DEFINE $l $l"
-			}
-			# END
-			################################################################################
+		check_set_flo $x
+		################################################################################
+		# BEGIN detection of a duplicated library in the file_set_total
+		if { [lsearch $libraries $l ] == -1 } {
+			# Create the directory for the library
+			exec mkdir -p [file dirname ${generate-cds-file}]/$l
+			# Add the library in the list so we do not have double entries in the ${generate-cds-file}
+			lappend libraries $l
+			# Add the library in the $cdslib
+			puts $fileId_cdslib "DEFINE $l $l"
 		}
+		# END
+		################################################################################
 	}
 	close $fileId_cdslib
 	puts ""
@@ -87,20 +121,15 @@ proc generate_fileset args {
 	set files ""
 	set equivalent_files "" ; # equivalent files are those that can be compiled together
 	foreach x $file_set_total {
-		foreach { f t l o } $x {
-			if { ! [string match "* $t *" " vhdl verilog vlog verilogams vams " ] } {
-				display_message error "unrecognised type $t for file $f"
-				display_message error "Type can be either vhdl/verilog/vlog/verilogams/vams"
-			}
-			if { [lsearch $files [subst $f] ] == -1 } {
-				# Add the file in the list so we do not have double entries
-				lappend files [subst $f]
-				puts $fileId_filesetout "\{ $x \}"
-			} else {
-				# duplicate file
-				display_message info "Duplicate file ($f)"
-				continue
-			}
+		check_set_flo $x
+		if { [lsearch $files [subst $f] ] == -1 } {
+			# Add the file in the list so we do not have double entries
+			lappend files [subst $f]
+			puts $fileId_filesetout "\{ \{$f\} \{$l\} \{$o\}  \}"
+		} else {
+			# duplicate file
+			display_message info "Duplicate file ($f)"
+			continue
 		}
 	}
 	puts ""
@@ -143,23 +172,15 @@ proc irun_fileset args {
 
 	set irun_files ""
 	set previous_lib ""
+	set previous_opt ""
 	foreach x $file_set_total {
-		foreach { f t l o } $x {
-			display_message debug "<2> $f"
-			if { "$previous_lib" != "$l" } {
-				if { "$irun_files" == "" } {
-					set irun_files "$irun_files \\\n-makelib $l"
-				} else {
-					set irun_files "$irun_files \\\n${opt} \\\n${accumulate_file} \\\n-endlib \\\n-makelib $l"
-				}
-				set previous_lib $l
-				set accumulate_file "  $f"
-				set opt "  [string trim $o]"
+		check_set_flo $x
+		display_message debug "<2> $f"
+		if { "$previous_lib" != "$l" || "$previous_opt" != "$o"  } {
+			if { "$irun_files" == "" } {
+				set irun_files "$irun_files \\\n-makelib $l"
 			} else {
-				set accumulate_file "$accumulate_file \\\n  $f"
-				if { [string trim $o] != "" } {
-					set opt [concat $opt "\\\n" "  " $o]
-				}
+				set irun_files "$irun_files \\\n${accumulate_file} \\\n-endlib \\\n-makelib $l \\\n${o}"
 			}
 		}
 	}
