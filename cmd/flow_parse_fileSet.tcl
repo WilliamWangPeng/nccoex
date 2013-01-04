@@ -182,9 +182,14 @@ proc irun_fileset args {
 			} else {
 				set irun_files "$irun_files \\\n${accumulate_file} \\\n-endlib \\\n-makelib $l \\\n${o}"
 			}
+			set previous_lib $l
+			set previous_opt $o
+			set accumulate_file "  $f"
+		} else {
+			set accumulate_file "$accumulate_file \\\n  $f"
 		}
 	}
-	set irun_files "$irun_files \\\n${opt} \\\n${accumulate_file} \\\n-endlib"
+	set irun_files "$irun_files \\\n${o} \\\n${accumulate_file} \\\n-endlib"
 
 	# END
 	set cmd [concat $irun $irun_files \\\n-l "log/irun.log"]
@@ -214,7 +219,7 @@ set var_array(10,file)			[list "--file" "<none>" "string" "1" "infinity" "" "TCL
 set var_array(20,fileset-out)		[list "--fileset-out" "" "string" "1" "1" "" "Writes out a new fileset removing duplicate entries"]
 set var_array(30,generate-cds-lib)	[list "--generate-cds-lib" "" "string" "1" "1" "" "Generates a cds.lib file automatically. For irun this is not recommended."]
 set var_array(60,no-irun)		[list "--no-irun" "false" "boolean" "1" "1" "" "Prevents running irun."]
-set var_array(70,irun-option)		[list "--irun-option" "-v93 -top $CRT_CELL" "string" "1" "1" "" "If user wants to pass additional command line options to irun command"]
+set var_array(70,irun-option)		[list "--irun-option" "-v93 -top $CRT_CELL" "string" "1" "1" "" "If user wants to pass additional command line options to irun command. "]
 set var_array(80,template)		[list "--template" "" "string" "1" "1" "" "Specify the name of the standalone template script."]
 
 set help_head {
@@ -225,6 +230,13 @@ set help_head {
 	puts "  This utility can also:"
 	puts "    - generate cds.lib file"
 	puts "    - bash shell script for standalone run"
+	puts ""
+}
+
+set help_tail {
+	puts "Note:"
+	puts "  When specifying --irun-option make sure you also include -top option or you'll get the following error:  "
+	puts "  *E,NODSN: There are no design files being compiled."
 	puts ""
 }
 
