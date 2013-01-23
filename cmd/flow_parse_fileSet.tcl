@@ -22,10 +22,12 @@ proc check_set_flo {x} {
 	upvar l l 
 	upvar o o 
 	upvar warning_given warning_given
-	if { [ llength $x ] == 4 && ! [info exists warning_given]} {
-		display_message info "List item detected for $x."
-		display_message none    " <Type> might disappear in the future since irun/octopus/etc. should be able to detect it automatically"
-		set warning_given "true"
+	if { [ llength $x ] == 4 } {
+		if { ! [info exists warning_given] } {
+			display_message info "List item detected for $x."
+			display_message none    " <Type> might disappear in the future since irun/octopus/etc. should be able to detect it automatically"
+			set warning_given "true"
+		}
 		set f [lindex $x 0]
 		set t [lindex $x 1]
 		set l [lindex $x 2]
