@@ -144,13 +144,15 @@ proc generate_fileset args {
 
 ################################################################################
 # BEGIN procedure for parsing the fileset file(s)
-proc irun_fileset args {
+proc irun_fileset_template args {
 
 	upvar #0 env env
 
 	set var_array(10,file)    	[list "--file" "<none>" "string" "1" "infinity" "" "Input file contains all files to be compiled"]
 	set var_array(20,template)	[list "--template" "" "string" "1" "1" "" "Specify the name of the template script to write out"]
 	set var_array(30,irun-option)	[list "--irun-option" "" "string" "1" "1" "" "If user wants to pass additional command line options to irun command"]
+	set var_array(60,no-irun)	[list "--no-irun" "false" "boolean" "1" "1" "" "Prevents running irun."]
+	set var_array(80,lib-option)	[list "--lib-option" "" "string" "1" "1" "" "If user wants to pass additional command line options after all makelib command."]
 
 	::octopus::extract_check_options_data
 
@@ -200,14 +202,12 @@ proc irun_fileset args {
 		regsub -all {env\(([^\s]+)\)} $cmd {\1} cmd_template
 		puts $fileId_template "$cmd_template"
 	}
-	display_message info "Invoking irun... Be patient."
-	if { [catch {eval exec $cmd >&@stdout}] } {
-		display_message error "Running irun. Check log/irun.log for additional information."
-	}
 
 	::octopus::append_cascading_variables
 	puts ""
-	display_message info "DONE: Running irun"
+	if { "$template" != "" } { close $fileId_template }
+
+	return $cmd
 }
 # END procedure for parsing the fileset file(s)
 ################################################################################
@@ -222,7 +222,8 @@ set var_array(20,fileset-out)		[list "--fileset-out" "" "string" "1" "1" "" "Wri
 set var_array(30,generate-cds-lib)	[list "--generate-cds-lib" "" "string" "1" "1" "" "Generates a cds.lib file automatically. For irun this is not recommended."]
 set var_array(60,no-irun)		[list "--no-irun" "false" "boolean" "1" "1" "" "Prevents running irun."]
 set var_array(70,irun-option)		[list "--irun-option" "-v93 -top $CRT_CELL" "string" "1" "1" "" "If user wants to pass additional command line options to irun command. "]
-set var_array(80,template)		[list "--template" "" "string" "1" "1" "" "Specify the name of the standalone template script."]
+set var_array(80,lib-option)		[list "--lib-option" "" "string" "1" "1" "" "If user wants to pass additional command line options after all makelib command."]
+set var_array(90,template)		[list "--template" "" "string" "1" "1" "" "Specify the name of the standalone template script."]
 
 set help_head {
 	puts "[uplevel {file tail $argv0} ]"
@@ -289,10 +290,19 @@ if { "${fileset-out}" != "" } {
 	generate_fileset --file ${file} --output-file ${fileset-out}
 }
 
+
+set cmd [irun_fileset_template --file ${file} --template $template --irun-option ${irun-option} --lib-option ${lib-option}]
 if { "${no-irun}" == "false" } {
-	irun_fileset --file ${file} --template $template --irun-option ${irun-option}
+	display_message info "Invoking irun... Be patient."
+	if { [catch {eval exec $cmd >&@stdout}] } {
+		display_message error "Running irun. Check log/irun.log for additional information."
+	}
+	display_message info "DONE: Running irun"
 	display_strange_warnings_fatals --file "log/irun.log"
 }
+
+
+
 ::octopus::abort_on error --messages
 # END
 ################################################################################
