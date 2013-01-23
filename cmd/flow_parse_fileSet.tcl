@@ -216,26 +216,24 @@ set var_array(10,file)			[list "--file" "<none>" "string" "1" "infinity" "" "TCL
 set var_array(20,fileset-out)		[list "--fileset-out" "" "string" "1" "1" "" "Writes out a new fileset removing duplicate entries"]
 set var_array(30,generate-cds-lib)	[list "--generate-cds-lib" "" "string" "1" "1" "" "Generates a cds.lib file automatically. For irun this is not recommended."]
 set var_array(60,no-irun)		[list "--no-irun" "false" "boolean" "1" "1" "" "Prevents running irun."]
-set var_array(70,irun-option)		[list "--irun-option" "-v93 -top $CRT_CELL" "string" "1" "1" "" "If user wants to pass additional command line options to irun command. "]
-set var_array(80,lib-option)		[list "--lib-option" "" "string" "1" "1" "" "If user wants to pass additional command line options after all makelib command."]
+set var_array(70,irun-option)		[list "--irun-option" "-v93 -top $CRT_CELL" "string" "1" "1" "" "If user wants to pass additional command line options to irun command."]
+set var_array(80,lib-option)		[list "--lib-option" "" "string" "1" "1" "" "If user wants to pass additional command line options within the -makelib option."]
 set var_array(90,template)		[list "--template" "" "string" "1" "1" "" "Specify the name of the standalone template script."]
 
 set help_head {
-	puts "[uplevel {file tail $argv0} ]"
-	puts ""
-	puts "Description:"
-	puts "  Starts irun on the file sets."
-	puts "  This utility can also:"
-	puts "    - generate cds.lib file"
-	puts "    - bash shell script for standalone run"
-	puts ""
+	display_message info "Starts irun on utel TCL compliant RTL filesets. Much faster then running ncvlog/ncvdhl/ncelab standalone."
+	display_message info "The script can also:"
+	display_message none "    - generate cds.lib file"
+	display_message none "    - bash shell script for standalone run"
 }
 
 set help_tail {
-	puts "Note:"
-	puts "  When specifying --irun-option make sure you also include -top option or you'll get the following error:  "
-	puts "  *E,NODSN: There are no design files being compiled."
-	puts ""
+	display_message info  "Note:"
+	display_message tip  "  When specifying --irun-option make sure you also include -top option or you'll get the following error:  "
+	display_message none "  *E,NODSN: There are no design files being compiled."
+	display_message none ""
+	display_message tip  "  If you get messages like ncelab: *W,CUNOTB: component instance is not fully bound (:chip_vpb3(chip_vpb3_rtl):u0_bi2c) \[File:chip_vpb3_rtl.a.vhd, Line:192]"
+	display_message none "  then consider using relax option. e.g. --irun-option \"${irun-option} -relax\""
 }
 
 ::octopus::extract_check_options_data
