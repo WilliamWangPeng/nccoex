@@ -98,8 +98,6 @@ proc generate_cds_lib args {
 # BEGIN Generating a single output file
 proc generate_fileset args {
 
-	upvar #0 env env
-
 	set var_array(10,file)    	[list "--file" "<none>" "string" "1" "1" "" "Input file from which cds.lib is generated"]
 	set var_array(10,output-file)  	[list "--output-file" "<none>" "string" "1" "1" "" "Name of the output file."]
 
@@ -146,8 +144,6 @@ proc generate_fileset args {
 # BEGIN procedure for parsing the fileset file(s)
 proc irun_fileset_template args {
 
-	upvar #0 env env
-
 	set var_array(10,file)    	[list "--file" "<none>" "string" "1" "infinity" "" "Input file contains all files to be compiled"]
 	set var_array(20,template)	[list "--template" "" "string" "1" "1" "" "Specify the name of the template script to write out"]
 	set var_array(30,irun-option)	[list "--irun-option" "" "string" "1" "1" "" "If user wants to pass additional command line options to irun command"]
@@ -157,7 +153,6 @@ proc irun_fileset_template args {
 	::octopus::extract_check_options_data
 
 	::octopus::abort_on error --return
-
 
 	exec mkdir -p log; catch {eval exec rm -rf [glob log/*log]}
 
@@ -294,8 +289,9 @@ if { "${fileset-out}" != "" } {
 set cmd [irun_fileset_template --file ${file} --template $template --irun-option ${irun-option} --lib-option ${lib-option}]
 if { "${no-irun}" == "false" } {
 	display_message info "Invoking irun... Be patient."
-	if { [catch {eval exec $cmd >&@stdout}] } {
-		display_message error "Running irun. Check log/irun.log for additional information."
+	if { [catch {eval exec $cmd >&@stdout} error] } {
+		display_message error "Running irun. Check log/irun.log for additional information. or generate a template using --template option"
+		display_message error "$error"
 	}
 	display_message info "DONE: Running irun"
 	display_strange_warnings_fatals --file "log/irun.log"
