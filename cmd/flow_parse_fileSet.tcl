@@ -182,18 +182,18 @@ proc irun_fileset_template args {
 		display_message debug "<2> $f"
 		if { "$previous_lib" != "$l" || "$previous_opt" != "$o"  } {
 			if { "$irun_files" == "" } {
-				set irun_files "$irun_files \\\n-makelib $l"
+				set irun_files "$irun_files \\\n\t-makelib $l \\\n\t\t${lib-option}"
 			} else {
-				set irun_files "$irun_files \\\n${accumulate_file} \\\n-endlib \\\n-makelib $l \\\n${o}"
+				set irun_files "$irun_files \\\n\t\t\t${accumulate_file} \\\n\t-endlib \\\n\t-makelib $l \\\n\t\t${lib-option} \\\n\t\t${o}"
 			}
 			set previous_lib $l
 			set previous_opt $o
-			set accumulate_file "  $f"
+			set accumulate_file "$f"
 		} else {
-			set accumulate_file "$accumulate_file \\\n  $f"
+			set accumulate_file "$accumulate_file\\\n\t\t\t$f"
 		}
 	}
-	set irun_files "$irun_files \\\n${o} \\\n${accumulate_file} \\\n-endlib"
+	set irun_files "$irun_files \\\n${o} \\\n\t\t\t${accumulate_file} \\\n\t-endlib"
 
 	# END
 	set cmd [concat $irun $irun_files \\\n-l "log/irun.log"]
