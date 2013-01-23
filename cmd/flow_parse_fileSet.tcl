@@ -41,7 +41,7 @@ proc check_set_flo {x} {
 		set l [lindex $x 1]
 		set o [lindex $x 2]
 	} else {
-		display_message error "Wrong format detected. List content is: $x while it should be <file> [<type>] <library> <options>"
+		display_message error "Wrong format detected. List content is: $x while it should be <file> \[<type>\] <library> <options>"
 		set f "<ERROR in source file>"
 		set l "<ERROR in source file>"
 		set o "<ERROR in source file>"
