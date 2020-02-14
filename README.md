@@ -1,8 +1,3 @@
-nccoex
-======
-
-nccoex TCL script for compiling/elaborating/simulating your RTL
-
 ### RISCV后端和llvm-mc介绍 第一课-20200212-实习生王鹏
 
 报告题目：RISCV后端和llvm-mc介绍
